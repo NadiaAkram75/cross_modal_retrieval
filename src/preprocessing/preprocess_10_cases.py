@@ -13,7 +13,7 @@ output_dir.mkdir(parents=True, exist_ok=True)
 
 resize = Resize(spatial_size=(128, 128, 128))
 
-cases = sorted([p for p in root.iterdir() if p.is_dir()])[:10]
+cases = sorted([p for p in root.iterdir() if p.is_dir()])
 
 for case in cases:
     case_id = case.name
