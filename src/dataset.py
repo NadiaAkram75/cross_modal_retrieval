@@ -10,4 +10,10 @@ class BraTSDataset:
         return len(self.files)
 
     def __getitem__(self, idx):
-        return np.load(self.files[idx])
+        file_path = self.files[idx]
+
+        volume = np.load(file_path)
+
+        case_id = file_path.stem
+
+        return volume, case_id
