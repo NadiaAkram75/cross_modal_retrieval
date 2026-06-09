@@ -4,7 +4,16 @@ import torch.nn as nn
 from model import AutoEncoder
 from dataset import BraTSDataset
 
+
+from torch.utils.data import DataLoader
+
 dataset = BraTSDataset("data/processed/t1ce")
+
+dataloader = DataLoader(
+    dataset,
+    batch_size=1,
+    shuffle=True
+)
 
 model = AutoEncoder()
 
@@ -15,32 +24,15 @@ optimizer = torch.optim.Adam(
     lr=1e-3
 )
 
-volume, case_id = dataset[0]
+#volume, case_id = dataset[0]
 
-x = torch.tensor(volume)
+#x = torch.tensor(volume)
 
-x = x.unsqueeze(0)
-x = x.unsqueeze(0)
+#x = x.unsqueeze(0)
+#x = x.unsqueeze(0)
 
-# reconstruction, z = model(x)
-
-# print("input:", x.shape)
-# print("reconstruction:", reconstruction.shape)
-# print("embedding:", z.shape)
-
-# loss = criterion(reconstruction, x)
-
-# print("loss:", loss.item())
-
-# optimizer.zero_grad()
-# loss.backward()
-# optimizer.step()
-
-# reconstruction, z = model(x)
-
-# new_loss = criterion(reconstruction, x)
-
-# print("new loss:", new_loss.item())
+x, case_id = next(iter(dataloader))
+x = x.unsqueeze(1)
 
 for epoch in range(10):
 
