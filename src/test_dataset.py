@@ -7,3 +7,4 @@ volume, case_id = dataset[0]
 
 print(case_id)
 print(volume.shape)
+print(volume.dtype)
