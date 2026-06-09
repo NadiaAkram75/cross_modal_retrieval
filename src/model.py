@@ -29,8 +29,8 @@ class SimpleEncoder(nn.Module):
 
         self.pool = nn.MaxPool3d(kernel_size=2)
         self.relu = nn.ReLU()
-        self.gap = nn.AdaptiveAvgPool3d(1)
-        self.embedding = nn.Linear(32, self.embedding_dim)
+        #self.gap = nn.AdaptiveAvgPool3d(1)
+        self.embedding = nn.Linear(131072, self.embedding_dim)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -45,7 +45,7 @@ class SimpleEncoder(nn.Module):
         x = self.relu(x)
         x = self.pool(x)
 
-        x = self.gap(x)
+       # x = self.gap(x)
         x = torch.flatten(x, start_dim=1)
         x = self.embedding(x)
 
@@ -58,7 +58,7 @@ class SimpleDecoder(nn.Module):
 
         self.relu = nn.ReLU()
 
-        self.fc = nn.Linear(32, 32)
+        self.fc = nn.Linear(32, 131072)
 
 
         self.deconv1 = nn.ConvTranspose3d(
@@ -86,7 +86,7 @@ class SimpleDecoder(nn.Module):
     def forward(self, z):
         x = self.fc(z)
 
-        x = x.view(-1, 32, 1, 1, 1)
+        x = x.view(-1, 32, 16, 16, 16)
 
         x = self.deconv1(x)
         x = self.relu(x)
