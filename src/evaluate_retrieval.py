@@ -34,6 +34,7 @@ def euclidean_distance_matrix(x):
 
 def row_minmax(d):
     scaled = np.zeros_like(d)
+
     for i in range(d.shape[0]):
         row = d[i].copy()
         mask = np.ones(len(row), dtype=bool)
@@ -112,22 +113,64 @@ def bootstrap_ci(values, num_bootstrap=1000, seed=42):
 
 def main():
     parser = argparse.ArgumentParser()
+
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--relevance-pool", type=int, default=10)
     parser.add_argument("--weights", type=str, default="0,0.25,0.5,0.75,1.0")
-    parser.add_argument("--out", type=str, default="results/retrieval_evaluation.csv")
+
+    parser.add_argument(
+        "--embedding-path",
+        type=str,
+        default="data/embeddings/embeddings.npy",
+        help="Path to visual embeddings. Use contrastive_embeddings.npy to evaluate the contrastive encoder.",
+    )
+    parser.add_argument(
+        "--case-id-path",
+        type=str,
+        default="data/embeddings/case_ids.npy",
+        help="Path to case IDs corresponding to the visual embeddings.",
+    )
+    parser.add_argument(
+        "--semantic-features-path",
+        type=str,
+        default="data/embeddings/semantic_features.npy",
+        help="Path to semantic tumor-mask features.",
+    )
+    parser.add_argument(
+        "--semantic-case-id-path",
+        type=str,
+        default="data/embeddings/semantic_case_ids.npy",
+        help="Path to case IDs corresponding to semantic features.",
+    )
+    parser.add_argument(
+        "--out",
+        type=str,
+        default="results/tables/retrieval_evaluation.csv",
+        help="Output CSV path.",
+    )
+
     args = parser.parse_args()
 
-    embeddings = np.load("embeddings.npy")
-    case_ids = clean_ids(np.load("case_ids.npy", allow_pickle=True))
+    embeddings = np.load(args.embedding_path)
+    case_ids = clean_ids(np.load(args.case_id_path, allow_pickle=True))
 
-    semantic_features = np.load("semantic_features.npy")
-    semantic_case_ids = clean_ids(np.load("semantic_case_ids.npy", allow_pickle=True))
+    semantic_features = np.load(args.semantic_features_path)
+    semantic_case_ids = clean_ids(
+        np.load(args.semantic_case_id_path, allow_pickle=True)
+    )
 
     visual_map = {case_id: embeddings[i] for i, case_id in enumerate(case_ids)}
-    semantic_map = {case_id: semantic_features[i] for i, case_id in enumerate(semantic_case_ids)}
+    semantic_map = {
+        case_id: semantic_features[i]
+        for i, case_id in enumerate(semantic_case_ids)
+    }
 
     common_ids = [case_id for case_id in case_ids if case_id in semantic_map]
+
+    if len(common_ids) == 0:
+        raise ValueError(
+            "No common case IDs found between visual embeddings and semantic features."
+        )
 
     visual = np.array([visual_map[case_id] for case_id in common_ids])
     semantic = np.array([semantic_map[case_id] for case_id in common_ids])
@@ -140,8 +183,6 @@ def main():
 
     weights = [float(w) for w in args.weights.split(",")]
 
-    results = []
-
     methods = {
         "visual_only": visual_scaled,
         "semantic_only_oracle": semantic_scaled,
@@ -152,6 +193,8 @@ def main():
             w * semantic_scaled + (1.0 - w) * visual_scaled
         )
 
+    results = []
+
     for method_name, method_dist in methods.items():
         scores = evaluate_method(
             method_name=method_name,
@@ -161,7 +204,16 @@ def main():
             relevance_pool=args.relevance_pool,
         )
 
-        row = {"method": method_name}
+        row = {
+            "method": method_name,
+            "embedding_path": args.embedding_path,
+            "case_id_path": args.case_id_path,
+            "semantic_features_path": args.semantic_features_path,
+            "semantic_case_id_path": args.semantic_case_id_path,
+            "num_cases": len(common_ids),
+            "top_k": args.top_k,
+            "relevance_pool": args.relevance_pool,
+        }
 
         for metric_name in [
             "mean_semantic_distance_at_k",
@@ -176,7 +228,9 @@ def main():
 
         results.append(row)
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    out_dir = os.path.dirname(args.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(args.out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=results[0].keys())
@@ -184,6 +238,7 @@ def main():
         writer.writerows(results)
 
     print(f"Evaluated {len(common_ids)} common cases")
+    print(f"Visual embeddings: {args.embedding_path}")
     print(f"Saved: {args.out}")
     print()
 
