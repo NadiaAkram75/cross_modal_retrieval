@@ -1,9 +1,24 @@
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+.venv/
+venv/
+TrustMedX_env/
+.env
 
 data/raw/
 data/processed/
 data/embeddings/
+*.nii
+*.nii.gz
+*.npy
 
-.venv/
-venv/
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+.DS_Store
+Thumbs.db
