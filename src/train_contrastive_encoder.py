@@ -24,12 +24,22 @@ def first_existing(paths):
 
 def clean_ids(ids):
     cleaned = []
+
     for x in ids:
         if isinstance(x, (list, np.ndarray)):
             cleaned.append(str(x[0]))
         else:
             cleaned.append(str(x))
+
     return cleaned
+
+
+def load_allowed_case_ids(split_case_id_path):
+    if split_case_id_path is None:
+        return None
+
+    split_ids = clean_ids(np.load(split_case_id_path, allow_pickle=True))
+    return set(split_ids)
 
 
 def zscore(x):
@@ -93,10 +103,13 @@ class SemanticPairDataset(Dataset):
         semantic_case_ids_path,
         image_size=128,
         positive_k=10,
+        split_case_id_path=None,
     ):
         self.data_root = data_root
         self.image_size = image_size
         self.positive_k = positive_k
+
+        allowed_case_ids = load_allowed_case_ids(split_case_id_path)
 
         semantic_features = np.load(semantic_features_path)
         semantic_case_ids = clean_ids(
@@ -107,6 +120,9 @@ class SemanticPairDataset(Dataset):
         valid_features = []
 
         for case_id, feature in zip(semantic_case_ids, semantic_features):
+            if allowed_case_ids is not None and case_id not in allowed_case_ids:
+                continue
+
             try:
                 find_nifti(data_root, case_id, "flair")
                 find_nifti(data_root, case_id, "seg")
@@ -114,6 +130,12 @@ class SemanticPairDataset(Dataset):
                 valid_features.append(feature)
             except FileNotFoundError:
                 continue
+
+        if len(valid_case_ids) < 2:
+            raise ValueError(
+                "Need at least 2 valid cases for contrastive training. "
+                "Check data paths or split file."
+            )
 
         self.case_ids = valid_case_ids
         self.semantic_features = np.array(valid_features, dtype=np.float32)
@@ -124,14 +146,19 @@ class SemanticPairDataset(Dataset):
 
         self.positive_indices = []
 
+        effective_positive_k = min(positive_k, len(self.case_ids) - 1)
+
         for i in range(len(self.case_ids)):
             ranking = np.argsort(dist[i])
             ranking = [j for j in ranking if j != i]
-            self.positive_indices.append(ranking[:positive_k])
+            self.positive_indices.append(ranking[:effective_positive_k])
 
         self.image_cache = {}
 
         print(f"Loaded {len(self.case_ids)} valid cases")
+
+        if split_case_id_path is not None:
+            print(f"Using split cases from: {split_case_id_path}")
 
     def __len__(self):
         return len(self.case_ids)
@@ -144,6 +171,7 @@ class SemanticPairDataset(Dataset):
                 case_id,
                 self.image_size,
             )
+
         return self.image_cache[index].float()
 
     def __getitem__(self, index):
@@ -233,6 +261,7 @@ def extract_embeddings(model, dataset, device):
 
 def main():
     parser = argparse.ArgumentParser()
+
     parser.add_argument("--data-root", type=str, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -241,7 +270,19 @@ def main():
     parser.add_argument("--embedding-dim", type=int, default=128)
     parser.add_argument("--positive-k", type=int, default=10)
     parser.add_argument("--temperature", type=float, default=0.1)
-    parser.add_argument("--model-out", type=str, default="models/contrastive_encoder.pth")
+
+    parser.add_argument(
+        "--split-case-id-path",
+        type=str,
+        default=None,
+        help="Optional .npy file containing case IDs to use for training only.",
+    )
+
+    parser.add_argument(
+        "--model-out",
+        type=str,
+        default="models/contrastive_encoder.pth",
+    )
     parser.add_argument(
         "--embedding-out",
         type=str,
@@ -252,6 +293,7 @@ def main():
         type=str,
         default="data/embeddings/contrastive_case_ids.npy",
     )
+
     args = parser.parse_args()
 
     semantic_features_path = first_existing(
@@ -280,6 +322,7 @@ def main():
         semantic_case_ids_path=semantic_case_ids_path,
         image_size=args.image_size,
         positive_k=args.positive_k,
+        split_case_id_path=args.split_case_id_path,
     )
 
     loader = DataLoader(
@@ -319,6 +362,8 @@ def main():
             "model_state_dict": model.state_dict(),
             "embedding_dim": args.embedding_dim,
             "image_size": args.image_size,
+            "split_case_id_path": args.split_case_id_path,
+            "num_training_cases": len(dataset),
         },
         args.model_out,
     )

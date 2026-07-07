@@ -122,7 +122,7 @@ def main():
         "--embedding-path",
         type=str,
         default="data/embeddings/embeddings.npy",
-        help="Path to visual embeddings. Use contrastive_embeddings.npy to evaluate the contrastive encoder.",
+        help="Path to visual embeddings. Use contrastive embeddings to evaluate the contrastive encoder.",
     )
     parser.add_argument(
         "--case-id-path",
@@ -141,6 +141,12 @@ def main():
         type=str,
         default="data/embeddings/semantic_case_ids.npy",
         help="Path to case IDs corresponding to semantic features.",
+    )
+    parser.add_argument(
+        "--test-case-id-path",
+        type=str,
+        default=None,
+        help="Optional path to test case IDs. If provided, evaluation is restricted to test cases.",
     )
     parser.add_argument(
         "--out",
@@ -167,9 +173,13 @@ def main():
 
     common_ids = [case_id for case_id in case_ids if case_id in semantic_map]
 
+    if args.test_case_id_path is not None:
+        test_ids = set(clean_ids(np.load(args.test_case_id_path, allow_pickle=True)))
+        common_ids = [case_id for case_id in common_ids if case_id in test_ids]
+
     if len(common_ids) == 0:
         raise ValueError(
-            "No common case IDs found between visual embeddings and semantic features."
+            "No common case IDs found between visual embeddings, semantic features, and optional test split."
         )
 
     visual = np.array([visual_map[case_id] for case_id in common_ids])
@@ -210,6 +220,7 @@ def main():
             "case_id_path": args.case_id_path,
             "semantic_features_path": args.semantic_features_path,
             "semantic_case_id_path": args.semantic_case_id_path,
+            "test_case_id_path": args.test_case_id_path,
             "num_cases": len(common_ids),
             "top_k": args.top_k,
             "relevance_pool": args.relevance_pool,
@@ -239,6 +250,7 @@ def main():
 
     print(f"Evaluated {len(common_ids)} common cases")
     print(f"Visual embeddings: {args.embedding_path}")
+    print(f"Test split: {args.test_case_id_path}")
     print(f"Saved: {args.out}")
     print()
 
